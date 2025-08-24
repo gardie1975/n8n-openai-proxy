@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy application code
 COPY proxy.py .
-COPY .env .
+# COPY .env .
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \

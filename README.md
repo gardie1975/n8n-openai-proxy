@@ -1,6 +1,6 @@
 # n8n to OpenAI Proxy
 
-A FastAPI server that converts n8n's NDJSON streaming format to OpenAI-compatible Server-Sent Events (SSE) format, enabling seamless integration with Open WebUI and other OpenAI-compatible clients.
+A FastAPI server that converts n8n's NDJSON streaming format to OpenAI-compatible Server-Sent Events (SSE) format, enabling seamless integration with Open WebUI and other OpenAI-compatible clients. Still a work in progress. The n8n webhook needs to be set as streamable and being only new, I am still working on the workflow which I will share in the future.
 
 ## Features
 
