@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  fastapi-proxy:
+    build: .
+    container_name: n8n-openai-proxy-test
+    ports:
+      - "8002:8000"
+    environment:
+      # Environment variables - set these in your shell or .env file
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_AUTH_TOKEN=${N8N_AUTH_TOKEN}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-120.0}
+      - PROXY_API_KEY=${PROXY_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - proxy-network
+
+networks:
+  proxy-network:
+    driver: bridge
