@@ -7,9 +7,27 @@ A FastAPI server that converts n8n's NDJSON streaming format to OpenAI-compatibl
 - **OpenAI-Compatible API**: Full compatibility with `/v1/chat/completions` endpoint
 - **Streaming Support**: Converts n8n NDJSON streams to OpenAI SSE format
 - **Non-Streaming Support**: Also handles regular completion requests
+- **Security First**: Timing-attack resistant authentication, mandatory configuration validation
 - **Error Handling**: Comprehensive error handling and logging
-- **CORS Support**: Ready for web client integration
+- **CORS Support**: Ready for web client integration with configurable origins
+- **Rate Limiting**: Built-in rate limiting per IP address
 - **Health Checks**: Built-in health check and models endpoints
+
+## Recent Security Updates
+
+⚠️ **Breaking Changes in Latest Version**:
+
+This version includes critical security improvements that require configuration changes:
+
+1. **Required Environment Variables**: `N8N_WEBHOOK_URL`, `N8N_AUTH_TOKEN`, and `PROXY_API_KEY` are now **mandatory**. The application will fail to start with a clear error message if any are missing. This prevents accidental deployment with insecure default credentials.
+
+2. **Timing-Attack Protection**: API key validation now uses constant-time comparison to prevent timing-based attacks.
+
+3. **CORS Policy Fix**: Removed hardcoded CORS wildcard that bypassed `ALLOWED_ORIGINS` configuration in streaming responses.
+
+4. **Docker Healthcheck Fix**: Updated to use standard library instead of non-existent dependencies.
+
+**Migration**: If upgrading from a previous version, ensure all three required environment variables are set in your `.env` file or environment before starting the application.
 
 ## Quick Start
 
@@ -19,14 +37,21 @@ A FastAPI server that converts n8n's NDJSON streaming format to OpenAI-compatibl
 pip install -r requirements.txt
 ```
 
-### 2. Configure n8n Settings
+### 2. Configure Required Settings ⚠️
 
-Copy `.env.example` to `.env` and update with your actual values:
+**IMPORTANT**: The following environment variables are **REQUIRED**. The application will fail to start if any are missing.
+
+Copy `.env.example` to `.env` and configure with your actual values:
 
 ```bash
 cp .env.example .env
-# Edit .env with your actual n8n webhook URL and auth token
+# Edit .env with your actual values - ALL required fields must be set
 ```
+
+**Required Variables** (app will not start without these):
+- `N8N_WEBHOOK_URL` - Your n8n webhook endpoint
+- `N8N_AUTH_TOKEN` - Authentication token for n8n
+- `PROXY_API_KEY` - Secure API key for proxy authentication
 
 ### 3. Run the Proxy
 
@@ -98,6 +123,9 @@ data: [DONE]
 ## Configuration
 
 ### Environment Variables
+
+⚠️ **BREAKING CHANGE**: As of the latest version, security-critical environment variables are **REQUIRED** and have no default values. The application will fail to start with a clear error message if any required variable is missing.
+
 Create a `.env` file from the example:
 
 ```bash
@@ -105,16 +133,24 @@ cp .env.example .env
 ```
 
 Then edit `.env` with your actual values:
+
+#### **Required Variables** (application will not start without these)
 ```bash
 N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/v1/chat/completions
-N8N_AUTH_TOKEN=your-auth-token
-PROXY_API_KEY=your-secure-api-key
-REQUEST_TIMEOUT=120.0
-ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
-RATE_LIMIT_REQUESTS=60
-RATE_LIMIT_WINDOW=60
-DEBUG_MODE=false
-SECURITY_HEADERS_ENABLED=true
+N8N_AUTH_TOKEN=your-secure-n8n-auth-token-here
+PROXY_API_KEY=your-secure-proxy-api-key-here
+```
+
+**Security Note**: Generate strong, random values for `N8N_AUTH_TOKEN` and `PROXY_API_KEY`. Never use example values in production.
+
+#### **Optional Variables** (with defaults)
+```bash
+REQUEST_TIMEOUT=120.0                    # Request timeout in seconds
+ALLOWED_ORIGINS=http://localhost:3000   # Comma-separated CORS origins
+RATE_LIMIT_REQUESTS=60                  # Max requests per minute per IP
+RATE_LIMIT_WINDOW=60                    # Rate limit window (currently unused)
+DEBUG_MODE=false                         # Show detailed errors (dev only)
+SECURITY_HEADERS_ENABLED=true           # Enable security headers
 ```
 
 ### CORS Security
@@ -143,6 +179,18 @@ Controls information disclosure in error messages:
 - `DEBUG_MODE=true` - **Development only**: Shows detailed errors for debugging
 - **Never enable debug mode in production** - exposes sensitive information
 
+## Security Features
+
+This proxy implements several security best practices:
+
+1. **Timing-Attack Resistant Authentication**: Uses constant-time comparison (`secrets.compare_digest()`) for API key validation to prevent timing-based attacks
+2. **Mandatory Configuration**: Critical security credentials must be explicitly configured - no insecure defaults
+3. **CORS Policy Enforcement**: Properly enforces configured `ALLOWED_ORIGINS` across all endpoints including streaming
+4. **Rate Limiting**: Per-IP rate limiting to prevent abuse
+5. **Security Headers**: Comprehensive HTTP security headers (CSP, X-Frame-Options, HSTS, etc.)
+6. **Input Validation**: Request validation and sanitization
+7. **Error Handling**: Prevents information disclosure in production mode
+
 ### Logging
 The proxy includes comprehensive logging. Set log level in the script:
 
@@ -154,10 +202,32 @@ logging.basicConfig(level=logging.INFO)  # or DEBUG for verbose output
 
 ### Common Issues
 
-1. **Connection Refused**: Ensure n8n webhook is accessible
-2. **Authentication Errors**: Verify `N8N_AUTH_TOKEN` is correct
-3. **Timeout Issues**: Increase `REQUEST_TIMEOUT` for longer responses
-4. **CORS Issues**: CORS is enabled by default for all origins
+1. **Application Won't Start - "environment variable is required"**:
+   - **Cause**: Missing required environment variables
+   - **Solution**: Ensure `.env` file exists with all three required variables: `N8N_WEBHOOK_URL`, `N8N_AUTH_TOKEN`, and `PROXY_API_KEY`
+   - Example error: `ValueError: PROXY_API_KEY environment variable is required`
+
+2. **Connection Refused**:
+   - Ensure n8n webhook is accessible from the proxy server
+   - Verify `N8N_WEBHOOK_URL` is correct and reachable
+
+3. **401 Authentication Errors**:
+   - Verify `N8N_AUTH_TOKEN` matches your n8n webhook configuration
+   - Ensure clients are using the correct `PROXY_API_KEY` in the Authorization header
+
+4. **Timeout Issues**:
+   - Increase `REQUEST_TIMEOUT` for longer responses
+   - Default is 120 seconds
+
+5. **CORS Issues**:
+   - Configure `ALLOWED_ORIGINS` with your client's domain
+   - For development, use `http://localhost:3000` or your dev server port
+   - For production, use your actual domain (never use `*` in production)
+
+6. **Docker Container Exits Immediately**:
+   - Check logs: `docker logs n8n-openai-proxy-test`
+   - Most common cause: Missing required environment variables
+   - Ensure all required variables are set in docker-compose.yml or exported before running
 
 ### Debug Mode
 
@@ -187,18 +257,26 @@ logging.basicConfig(level=logging.DEBUG)
 
 ### Environment Variables for Docker
 
-Set your environment variables before running:
+⚠️ **REQUIRED**: Set these environment variables before running, or the container will fail to start:
 
 ```bash
-# Set your actual values
+# Set your actual values (REQUIRED - container will exit if not set)
 export N8N_WEBHOOK_URL="https://your-n8n-instance.com/webhook/v1/chat/completions"
-export N8N_AUTH_TOKEN="your-auth-token"
-export PROXY_API_KEY="your-secure-api-key"
+export N8N_AUTH_TOKEN="your-secure-n8n-auth-token"
+export PROXY_API_KEY="your-secure-proxy-api-key"
+
+# Optional variables (with defaults)
 export REQUEST_TIMEOUT="120.0"
+export ALLOWED_ORIGINS="http://localhost:3000,http://localhost:8080"
+export RATE_LIMIT_REQUESTS="60"
+export DEBUG_MODE="false"
+export SECURITY_HEADERS_ENABLED="true"
 
 # Run with environment variables
 docker-compose up
 ```
+
+**Alternative**: Create a `.env` file in the same directory as `docker-compose.yml` with the required variables. Docker Compose will automatically load it.
 
 ### Open WebUI Integration with Docker
 
