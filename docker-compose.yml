@@ -14,7 +14,7 @@ services:
       - PROXY_API_KEY=${PROXY_API_KEY}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/', timeout=10).read()"]
       interval: 30s
       timeout: 10s
       retries: 3

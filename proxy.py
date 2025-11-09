@@ -10,6 +10,7 @@ import time
 import uuid
 import logging
 import os
+import secrets
 from typing import AsyncGenerator, Dict, Any
 from dotenv import load_dotenv
 
@@ -20,13 +21,21 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration from environment variables
-N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "https://n8n/v1/chat/completions")
-N8N_AUTH_TOKEN = os.getenv("N8N_AUTH_TOKEN", "123456")
-REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "120.0"))
+# Configuration from environment variables - Critical security settings (required)
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
+N8N_AUTH_TOKEN = os.getenv("N8N_AUTH_TOKEN")
+PROXY_API_KEY = os.getenv("PROXY_API_KEY")
 
-# API Key for proxy authentication
-PROXY_API_KEY = os.getenv("PROXY_API_KEY", "sk-proxy-n8n-fastapi-2024-secure-key-abc123def456")
+# Validate required environment variables
+if not N8N_WEBHOOK_URL:
+    raise ValueError("N8N_WEBHOOK_URL environment variable is required")
+if not N8N_AUTH_TOKEN:
+    raise ValueError("N8N_AUTH_TOKEN environment variable is required")
+if not PROXY_API_KEY:
+    raise ValueError("PROXY_API_KEY environment variable is required")
+
+# Optional configuration with defaults
+REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "120.0"))
 
 # CORS Origins - Parse comma-separated list
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
@@ -144,9 +153,9 @@ async def chat_completions(request: Request):
         
         if not auth_header.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header format")
-        
+
         token = auth_header.replace("Bearer ", "")
-        if token != PROXY_API_KEY:
+        if not secrets.compare_digest(token, PROXY_API_KEY):
             raise HTTPException(status_code=401, detail="Invalid API key")
         
         body = await request.json()
@@ -160,13 +169,12 @@ async def chat_completions(request: Request):
         if body.get("stream", False):
             logger.info("Streaming response requested")
             return StreamingResponse(
-                stream_n8n_response(body), 
+                stream_n8n_response(body),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                    "Access-Control-Allow-Origin": "*"
+                    "Content-Type": "text/event-stream; charset=utf-8"
                 }
             )
         else:
